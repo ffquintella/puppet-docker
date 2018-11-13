@@ -8,7 +8,7 @@
   "project_page": "https://github.com/puppetlabs/puppetlabs-docker",
   "issues_url": "https://github.com/puppetlabs/puppetlabs-docker/issues",
   "dependencies": [
-    {"name":"puppetlabs/stdlib","version_requirement":">= 4.24.0"}
+ 
   ],
   "data_provider": null,
   "operatingsystem_support": [
