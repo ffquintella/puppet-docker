@@ -122,6 +122,8 @@
 #                Writes log messages to fluentd (forward input).
 #     splunk   : Splunk logging driver for Docker.
 #                Writes log messages to Splunk (HTTP Event Collector).
+#     awslogs  : AWS Cloudwatch Logs logging driver for Docker.
+#                Write log messages to Cloudwatch API
 #
 # [*log_opt*]
 #   Set the log driver specific options
@@ -152,6 +154,15 @@
 #     splunk   :
 #                splunk-token=<splunk_http_event_collector_token>
 #                splunk-url=https://your_splunk_instance:8088
+#     awslogs  :
+#                awslogs-group=<Cloudwatch Log Group>
+#                awslogs-stream=<Cloudwatch Log Stream>
+#                awslogs-create-group=true|false
+#                awslogs-datetime-format=<Date format> - strftime expression
+#                awslogs-multiline-pattern=multiline start pattern using a regular expression
+#                tag={{.ID}} - short container id (12 characters)|
+#                    {{.FullID}} - full container id
+#                    {{.Name}} - container name
 #
 # [*selinux_enabled*]
 #   Enable selinux support. Default is false. SELinux does  not  presently
@@ -468,7 +479,7 @@ class docker(
   Optional[String] $storage_data_size                       = $docker::params::storage_data_size,
   Optional[String] $storage_min_data_size                   = $docker::params::storage_min_data_size,
   Optional[String] $storage_chunk_size                      = $docker::params::storage_chunk_size,
-  Optional[Boolean] $storage_growpart                      = $docker::params::storage_growpart,
+  Optional[Boolean] $storage_growpart                       = $docker::params::storage_growpart,
   Optional[String] $storage_auto_extend_pool                = $docker::params::storage_auto_extend_pool,
   Optional[String] $storage_pool_autoextend_threshold       = $docker::params::storage_pool_autoextend_threshold,
   Optional[String] $storage_pool_autoextend_percent         = $docker::params::storage_pool_autoextend_percent,
@@ -490,32 +501,32 @@ class docker(
 
   if $::osfamily {
     assert_type(Pattern[/^(Debian|RedHat|windows)$/], $::osfamily) |$a, $b| {
-      fail translate(('This module only works on Debian, Red Hat or Windows based systems.'))
+      fail(translate('This module only works on Debian, Red Hat or Windows based systems.'))
     }
   }
 
-  if ($::operatingsystem == 'CentOS') and (Integer($::operatingsystemmajrelease) < 7){
-    fail translate(('This module only works on CentOS version 7 and higher based systems.'))
+  if ($::operatingsystem == 'CentOS') and (versioncmp($::operatingsystemmajrelease, '7') < 0) {
+    fail(translate('This module only works on CentOS version 7 and higher based systems.'))
   }
 
   if ($default_gateway) and (!$bridge) {
-    fail translate(('You must provide the $bridge parameter.'))
+    fail(translate('You must provide the $bridge parameter.'))
   }
 
   if $log_level {
     assert_type(Pattern[/^(debug|info|warn|error|fatal)$/], $log_level) |$a, $b| {
-        fail translate(('log_level must be one of debug, info, warn, error or fatal'))
+      fail(translate('log_level must be one of debug, info, warn, error or fatal'))
     }
   }
 
   if $log_driver {
     if $::osfamily == 'windows' {
-      assert_type(Pattern[/^(none|json-file|syslog|gelf|fluentd|splunk|etwlogs)$/], $log_driver) |$a, $b| {
-        fail translate(('log_driver must be one of none, json-file, syslog, gelf, fluentd, splunk or etwlogs'))
+      assert_type(Pattern[/^(none|json-file|syslog|gelf|fluentd|splunk|awslogs|etwlogs)$/], $log_driver) |$a, $b| {
+        fail(translate('log_driver must be one of none, json-file, syslog, gelf, fluentd, splunk, awslogs or etwlogs'))
       }
     } else {
-      assert_type(Pattern[/^(none|json-file|syslog|journald|gelf|fluentd|splunk)$/], $log_driver) |$a, $b| {
-        fail translate(('log_driver must be one of none, json-file, syslog, journald, gelf, fluentd or splunk'))
+      assert_type(Pattern[/^(none|json-file|syslog|journald|gelf|fluentd|splunk|awslogs)$/], $log_driver) |$a, $b| {
+        fail(translate('log_driver must be one of none, json-file, syslog, journald, gelf, fluentd, splunk or awslogs'))
       }
     }
   }
@@ -523,34 +534,34 @@ class docker(
   if $storage_driver {
     if $::osfamily == 'windows' {
       assert_type(Pattern[/^(windowsfilter)$/], $storage_driver) |$a, $b| {
-          fail translate(('Valid values for storage_driver on windows are windowsfilter'))
+        fail(translate('Valid values for storage_driver on windows are windowsfilter'))
       }
     } else {
       assert_type(Pattern[/^(aufs|devicemapper|btrfs|overlay|overlay2|vfs|zfs)$/], $storage_driver) |$a, $b| {
-        fail translate(('Valid values for storage_driver are aufs, devicemapper, btrfs, overlay, overlay2, vfs, zfs.'))
+        fail(translate('Valid values for storage_driver are aufs, devicemapper, btrfs, overlay, overlay2, vfs, zfs.'))
       }
     }
   }
 
   if ($bridge) and ($::osfamily == 'windows') {
       assert_type(Pattern[/^(none|nat|transparent|overlay|l2bridge|l2tunnel)$/], $bridge) |$a, $b| {
-        fail translate(('bridge must be one of none, nat, transparent, overlay, l2bridge or l2tunnel on Windows.'))
+        fail(translate('bridge must be one of none, nat, transparent, overlay, l2bridge or l2tunnel on Windows.'))
     }
   }
 
   if $dm_fs {
     assert_type(Pattern[/^(ext4|xfs)$/], $dm_fs) |$a, $b| {
-      fail translate(('Only ext4 and xfs are supported currently for dm_fs.'))
+      fail(translate('Only ext4 and xfs are supported currently for dm_fs.'))
     }
   }
 
   if ($dm_loopdatasize or $dm_loopmetadatasize) and ($dm_datadev or $dm_metadatadev) {
-    fail translate(('You should provide parameters only for loop lvm or direct lvm, not both.'))
+    fail(translate('You should provide parameters only for loop lvm or direct lvm, not both.'))
   }
 
 # lint:ignore:140chars
   if ($dm_datadev or $dm_metadatadev) and $dm_thinpooldev {
-    fail translate(('You can use the $dm_thinpooldev parameter, or the $dm_datadev and $dm_metadatadev parameter pair, but you cannot use both.'))
+    fail(translate('You can use the $dm_thinpooldev parameter, or the $dm_datadev and $dm_metadatadev parameter pair, but you cannot use both.'))
   }
 # lint:endignore
 
@@ -559,22 +570,22 @@ class docker(
   }
 
   if ($dm_datadev and !$dm_metadatadev) or (!$dm_datadev and $dm_metadatadev) {
-    fail translate(('You need to provide both $dm_datadev and $dm_metadatadev parameters for direct lvm.'))
+    fail(translate('You need to provide both $dm_datadev and $dm_metadatadev parameters for direct lvm.'))
   }
 
   if ($dm_basesize or $dm_fs or $dm_mkfsarg or $dm_mountopt or $dm_blocksize or $dm_loopdatasize or
       $dm_loopmetadatasize or $dm_datadev or $dm_metadatadev) and ($storage_driver != 'devicemapper') {
-    fail translate(('Values for dm_ variables will be ignored unless storage_driver is set to devicemapper.'))
+    fail(translate('Values for dm_ variables will be ignored unless storage_driver is set to devicemapper.'))
   }
 
   if($tls_enable) {
     if(!$tcp_bind) {
-        fail translate(('You need to provide tcp bind parameter for TLS.'))
+      fail(translate('You need to provide tcp bind parameter for TLS.'))
     }
   }
 
-if ( $version == undef ) or ( $version !~ /^(17[.]0[0-5][.][0-1](~|-|\.)ce|1.\d+)/ ) {
-  if ( $docker_ee) {
+  if ( $version == undef ) or ( $version !~ /^(17[.]0[0-5][.][0-1](~|-|\.)ce|1.\d+)/ ) {
+    if ( $docker_ee) {
       $package_location = $docker::docker_ee_source_location
       $package_key_source = $docker::docker_ee_key_source
       $package_key_check_source = true
@@ -584,26 +595,26 @@ if ( $version == undef ) or ( $version !~ /^(17[.]0[0-5][.][0-1](~|-|\.)ce|1.\d+
       $docker_start_command = $docker::docker_ee_start_command
       $docker_package_name = $docker::docker_ee_package_name
     } else {
-        case $::osfamily {
-          'Debian' : {
-            $package_location = $docker_ce_source_location
-            $package_key_source = $docker_ce_key_source
-            $package_key = $docker_ce_key_id
-            $package_repos = $docker_ce_channel
-            $release = $docker_ce_release
-            }
-          'Redhat' : {
-            $package_location = "https://download.docker.com/linux/centos/${::operatingsystemmajrelease}/${::architecture}/${docker_ce_channel}"
-            $package_key_source = $docker_ce_key_source
-            $package_key_check_source = true
-            }
-          'windows': {
-            fail translate(('This module only work for Docker Enterprise Edition on Windows.'))
-          }
-          default: {}
+      case $::osfamily {
+        'Debian' : {
+          $package_location = $docker_ce_source_location
+          $package_key_source = $docker_ce_key_source
+          $package_key = $docker_ce_key_id
+          $package_repos = $docker_ce_channel
+          $release = $docker_ce_release
         }
-        $docker_start_command = $docker_ce_start_command
-        $docker_package_name = $docker_ce_package_name
+        'Redhat' : {
+          $package_location = $docker_ce_source_location
+          $package_key_source = $docker_ce_key_source
+          $package_key_check_source = true
+        }
+        'windows': {
+          fail(translate('This module only work for Docker Enterprise Edition on Windows.'))
+        }
+        default: {}
+      }
+      $docker_start_command = $docker_ce_start_command
+      $docker_package_name = $docker_ce_package_name
     }
   } else {
     case $::osfamily {
@@ -614,7 +625,7 @@ if ( $version == undef ) or ( $version !~ /^(17[.]0[0-5][.][0-1](~|-|\.)ce|1.\d+
         $package_key = $docker_package_key_id
         $package_repos = 'main'
         $release = $docker_package_release
-        }
+      }
       'Redhat' : {
         $package_location = $docker_package_location
         $package_key_source = $docker_package_key_source
@@ -626,14 +637,26 @@ if ( $version == undef ) or ( $version !~ /^(17[.]0[0-5][.][0-1](~|-|\.)ce|1.\d+
     $docker_package_name = $docker_engine_package_name
   }
 
-  contain 'docker::repos'
-  contain 'docker::install'
-  contain 'docker::config'
-  contain 'docker::service'
+  if ( $version != undef ) and ( $version =~ /^(17[.]0[0-4]|1.\d+)/ ) {
+    $root_dir_flag = '-g'
+  } else {
+    $root_dir_flag = '--data-root'
+  }
 
-  Class['docker::repos'] -> Class['docker::install'] -> Class['docker::config'] -> Class['docker::service']
-  Class['docker'] -> Docker::Registry <||> -> Docker::Image <||>
-  Class['docker'] -> Docker::Image <||>
-  Class['docker'] -> Docker::Run <||>
+  if $ensure != 'absent' {
+    contain 'docker::repos'
+    contain 'docker::install'
+    contain 'docker::config'
+    contain 'docker::service'
 
+    Class['docker::repos'] -> Class['docker::install'] -> Class['docker::config'] -> Class['docker::service']
+    Class['docker'] -> Docker::Registry <||> -> Docker::Image <||>
+    Class['docker'] -> Docker::Image <||>
+    Class['docker'] -> Docker::Run <||>
+  } else {
+    contain 'docker::repos'
+    contain 'docker::install'
+
+    Class['docker::repos'] -> Class['docker::install']
+  }
 }

@@ -644,7 +644,7 @@ describe 'docker', :type => :class do
         it do
           expect {
             should contain_package('docker')
-          }.to raise_error(Puppet::Error, /log_driver must be one of none, json-file, syslog, journald, gelf, fluentd or splunk/)
+          }.to raise_error(Puppet::Error, /log_driver must be one of none, json-file, syslog, journald, gelf, fluentd, splunk or awslogs/)
         end
       end
 
@@ -705,10 +705,22 @@ describe 'docker', :type => :class do
         end
       end
 
-      context 'with custom root dir' do
-        let(:params) { {'root_dir' => '/mnt/docker'} }
+      context 'with custom root dir && Docker version < 17.06' do
+        let(:params) { {
+          'root_dir' => '/mnt/docker',
+          'version'  => '17.03',
+        } }
         it { should contain_file(service_config_file).with_content(/-g \/mnt\/docker/) }
       end
+  
+      context 'with custom root dir && Docker version > 17.05' do
+        let(:params) { {
+          'root_dir' => '/mnt/docker',
+          'version'  => '18.03',
+        } }
+        it { should contain_file(service_config_file).with_content(/--data-root \/mnt\/docker/) }
+      end
+       
 
       context 'with ensure absent' do
         let(:params) { {'ensure' => 'absent' } }

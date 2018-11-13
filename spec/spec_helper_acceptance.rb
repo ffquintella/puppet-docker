@@ -73,43 +73,27 @@ RSpec.configure do |c|
           on(host, 'yum install -y net-tools device-mapper')
         end
 
-        docker_compose_content = <<-EOS
-compose_test:
-  image: ubuntu:14.04
-  command: /bin/sh -c "while true; do echo hello world; sleep 1; done"
-extends_service:
-  extends: compose_test
-  command: /bin/sh -c "while true; do echo hello world; sleep 1; done"
-extends_extends_service:
-  extends: extends_service
-  command: /bin/sh -c "while true; do echo hello world; sleep 1; done"
-second_test:
-  image: ubuntu:14.04
-  command: /bin/sh -c "while true; do echo hello world; sleep 1; done"
-      EOS
-        docker_compose_content_v2 = <<-EOS
-version: "2"
-services:
-  compose_test:
-    image: ubuntu:14.04
-    command: /bin/sh -c "while true; do echo hello world; sleep 1; done"
-  extends_service:
-    extends: compose_test
-    command: /bin/sh -c "while true; do echo hello world; sleep 1; done"
-  extends_extends_service:
-    extends: extends_service
-    command: /bin/sh -c "while true; do echo hello world; sleep 1; done"
-  second_test:
-    image: ubuntu:14.04
-    command: /bin/sh -c "while true; do echo hello world; sleep 1; done"
-      EOS
         docker_compose_content_v3 = <<-EOS
-version: "3"
+version: "3.4"
 services:
   compose_test:
     image: ubuntu:14.04
     command: /bin/sh -c "while true; do echo hello world; sleep 1; done"
       EOS
+        docker_compose_override_v3 = <<-EOS
+version: "3.4"
+services:
+  compose_test:
+    image: debian:jessie
+    command: /bin/sh -c "while true; do echo hello world; sleep 1; done"
+        EOS
+        docker_stack_override_v3 = <<-EOS
+version: "3.4"
+services:
+  compose_test:
+    image: debian:jessie
+    command: /bin/sh -c "while true; do echo hello world; sleep 1; done"
+        EOS
         docker_compose_content_v3_windows = <<-EOS
 version: "3"
 services:
@@ -121,12 +105,41 @@ networks:
     external:
       name: nat
       EOS
-        create_remote_file(host, "/tmp/docker-compose.yml", docker_compose_content)
-        create_remote_file(host, "/tmp/docker-compose-v2.yml", docker_compose_content_v2)
+        docker_compose_override_v3_windows = <<-EOS
+version: "3"
+services:
+  compose_test:
+    image: hello-world:nanoserver-sac2016
+    command: cmd.exe /C "ping /t 8.8.8.8"
+networks:
+  default:
+    external:
+      name: nat
+      EOS
+        docker_stack_content_windows = <<-EOS
+version: "3"
+services:
+  compose_test:
+    image: hello-world:nanoserver
+    command: cmd.exe /C "ping /t 8.8.8.8"
+      EOS
+        docker_stack_override_windows = <<-EOS
+version: "3"
+services:
+  compose_test:
+    image: hello-world:nanoserver-sac2016
+    command: cmd.exe /C "ping /t 8.8.8.8"
+      EOS
         if fact_on(host, 'osfamily') == 'windows'
           create_remote_file(host, "/tmp/docker-compose-v3.yml", docker_compose_content_v3_windows)
+          create_remote_file(host, "/tmp/docker-stack.yml", docker_stack_content_windows)
+          create_remote_file(host, "/tmp/docker-compose-override-v3.yml", docker_compose_override_v3_windows)
+          create_remote_file(host, "/tmp/docker-stack-override.yml", docker_stack_override_windows)
         else
           create_remote_file(host, "/tmp/docker-compose-v3.yml", docker_compose_content_v3)
+          create_remote_file(host, "/tmp/docker-stack.yml", docker_compose_content_v3)
+          create_remote_file(host, "/tmp/docker-compose-override-v3.yml", docker_compose_override_v3)
+          create_remote_file(host, "/tmp/docker-stack-override.yml", docker_stack_override_v3)
         end
 
         if fact_on(host, 'osfamily') == 'windows'

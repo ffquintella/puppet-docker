@@ -72,6 +72,10 @@
 # configuration.  Most commonly used are on-failure or always.
 # Default: on-failure
 #
+# [*custom_unless*]
+# (optional) Specify an additional unless for the Docker run command when using restart.
+# Default: undef
+#
 define docker::run(
   Optional[Pattern[/^[\S]*$/]] $image,
   Optional[Pattern[/^present$|^absent$/]] $ensure       = 'present',
@@ -126,6 +130,7 @@ define docker::run(
   Optional[String]  $health_check_cmd                   = undef,
   Optional[Boolean] $restart_on_unhealthy               = false,
   Optional[Integer] $health_check_interval              = undef,
+  Optional[Array] $custom_unless                        = undef,
 ) {
   include docker
   include docker::params
@@ -200,6 +205,7 @@ define docker::run(
     health_check_cmd      => $health_check_cmd,
     restart_on_unhealthy  => $restart_on_unhealthy,
     health_check_interval => $health_check_interval,
+    osfamily              => $::osfamily,
   })
 
   $sanitised_title = regsubst($title, '[^0-9A-Za-z.\-_]', '-', 'G')
@@ -223,14 +229,18 @@ define docker::run(
     $exec_path = ['c:/Windows/Temp/', 'C:/Program Files/Docker/']
     $exec_provider = 'powershell'
     $cidfile = "c:/Windows/Temp/${service_prefix}${sanitised_title}.cid"
+# lint:ignore:140chars
     $restart_check = "${docker_command} inspect ${sanitised_title} -f '{{ if eq \\\"unhealthy\\\" .State.Health.Status }} {{ .Name }}{{ end }}' | findstr ${sanitised_title}"
+# lint:endignore
   } else {
     $exec_environment = 'HOME=/root'
     $exec_path = ['/bin', '/usr/bin']
     $exec_timeout = 0
     $exec_provider = undef
     $cidfile = "/var/run/${service_prefix}${sanitised_title}.cid"
+# lint:ignore:140chars
     $restart_check = "${docker_command} inspect ${sanitised_title} -f '{{ if eq \"unhealthy\" .State.Health.Status }} {{ .Name }}{{ end }}' | grep ${sanitised_title}"
+# lint:endignore
   }
 
   if $restart_on_unhealthy {
@@ -265,7 +275,7 @@ define docker::run(
       }
 
       file { $cidfile:
-              ensure => absent,
+        ensure => absent,
       }
     }
     else {
@@ -274,9 +284,15 @@ define docker::run(
         "--name ${sanitised_title} --cidfile=${cidfile}",
         "--restart=\"${restart}\" ${image} ${command}",
       ]
+      $inspect = ["${docker_command} inspect ${sanitised_title}"]
+      if $custom_unless {
+        $exec_unless = concat($custom_unless, $inspect)
+      } else {
+        $exec_unless = $inspect
+      }
       exec { "run ${title} with docker":
         command     => join($run_with_docker_command, ' '),
-        unless      => "${docker_command} inspect ${sanitised_title}",
+        unless      => $exec_unless,
         environment => $exec_environment,
         path        => $exec_path,
         provider    => $exec_provider,
@@ -293,14 +309,14 @@ define docker::run(
           timeout     => $exec_timeout
           }
       } else {
-          exec { "start ${title} with docker":
+        exec { "start ${title} with docker":
           command     => "${docker_command} start ${sanitised_title}",
           onlyif      => "${docker_command} inspect ${sanitised_title} -f \"{{ if (.State.Running) }} {{ nil }}{{ end }}\"",
           environment => $exec_environment,
           path        => $exec_path,
           provider    => $exec_provider,
           timeout     => $exec_timeout
-          }
+        }
       }
     }
   } else {
@@ -374,7 +390,7 @@ define docker::run(
       }
       else {
         file { $cidfile:
-              ensure => absent,
+          ensure => absent,
         }
       }
     }

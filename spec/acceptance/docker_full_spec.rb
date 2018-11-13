@@ -56,7 +56,7 @@ describe 'the Puppet Docker module' do
         # Delete all running containers
         shell("#{docker_command} rm -f $(#{docker_command} ps -a -q) || true")
         # Delete all existing images
-        shell("#{docker_command} rmi $(#{docker_command} images -q) || true")
+        shell("#{docker_command} rmi -f $(#{docker_command} images -q) || true")
         # Check to make sure no images are present
         shell("#{docker_command} images | wc -l") do |r|
           expect(r.stdout).to match(/^0|1$/)
@@ -225,6 +225,31 @@ describe 'the Puppet Docker module' do
               expect(r.stdout).to match(/unix:\/\/\/var\/run\/docker.sock/)
             end
           end
+        end
+      end
+
+      context 'uninstall docker' do
+        after(:all) do
+          @pp =<<-EOS
+            class {'docker': #{docker_args},
+              ensure => 'present'
+            }
+          EOS
+          apply_manifest(@pp, :catch_failures => true)
+
+          # Wait for reboot if windows
+          sleep 300 if fact('osfamily') == 'windows'
+        end
+
+        it 'should uninstall successfully' do
+          @pp =<<-EOS
+            class {'docker': #{docker_args},
+              ensure => 'absent'
+            }
+          EOS
+          apply_manifest(@pp, :catch_failures => true)
+          sleep 4
+          shell('docker ps', :acceptable_exit_codes => [1, 127])
         end
       end
     end
